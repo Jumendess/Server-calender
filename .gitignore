@@ -1,0 +1,11 @@
+# Ignorar o arquivo .env (que contém as credenciais sensíveis)
+.env
+
+# Ignorar a pasta node_modules
+node_modules/
+
+# Ignorar a pasta de logs ou outros arquivos temporários
+logs/
+
+# Ignorar os arquivos de sistema específicos (exemplo: em sistemas macOS)
+.DS_Store
