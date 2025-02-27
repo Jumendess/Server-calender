@@ -4,6 +4,8 @@ const { google } = require('googleapis');
 const app = express();
 const port = 3000;
 
+app.use(express.json());
+
 // Configuração de autenticação com a conta de serviço
 const auth = new google.auth.JWT(
   process.env.GOOGLE_CLIENT_EMAIL,
