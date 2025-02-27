@@ -32,24 +32,36 @@ app.get('/get-events', async (req, res) => {
     });
 
     const events = response.data.items;
-    const availableSlots = [];
+    const availableSlots = {};
+
+    // Função para formatar data
+    const formatDate = (date) => {
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      return new Date(date).toLocaleDateString('pt-BR', options);
+    };
 
     if (events.length === 0) {
       let lastEndTime = startDate;
 
+      // Gerar slots de 30 minutos para o intervalo de 27 a 28 de fevereiro
       while (lastEndTime < endDate) {
-        availableSlots.push({
+        const dateKey = formatDate(lastEndTime);
+        if (!availableSlots[dateKey]) {
+          availableSlots[dateKey] = [];
+        }
+
+        availableSlots[dateKey].push({
           start: lastEndTime.toISOString(),
           end: new Date(lastEndTime.getTime() + 30 * 60000).toISOString(),
         });
+
         lastEndTime = new Date(lastEndTime.getTime() + 30 * 60000);
       }
 
       res.json({
         status: 'success',
-        availableSlots: availableSlots
+        availableSlots: availableSlots,
       });
-
     } else {
       let lastEndTime = startDate;
 
@@ -57,28 +69,42 @@ app.get('/get-events', async (req, res) => {
         const eventStart = new Date(event.start.dateTime || event.start.date);
         const eventEnd = new Date(event.end.dateTime || event.end.date);
 
+        // Adicionar slots de 30 minutos antes do evento
         while (lastEndTime < eventStart) {
-          availableSlots.push({
+          const dateKey = formatDate(lastEndTime);
+          if (!availableSlots[dateKey]) {
+            availableSlots[dateKey] = [];
+          }
+
+          availableSlots[dateKey].push({
             start: lastEndTime.toISOString(),
             end: new Date(lastEndTime.getTime() + 30 * 60000).toISOString(),
           });
+
           lastEndTime = new Date(lastEndTime.getTime() + 30 * 60000);
         }
 
         lastEndTime = eventEnd;
       });
 
+      // Adicionar slots de 30 minutos após o último evento
       while (lastEndTime < endDate) {
-        availableSlots.push({
+        const dateKey = formatDate(lastEndTime);
+        if (!availableSlots[dateKey]) {
+          availableSlots[dateKey] = [];
+        }
+
+        availableSlots[dateKey].push({
           start: lastEndTime.toISOString(),
           end: new Date(lastEndTime.getTime() + 30 * 60000).toISOString(),
         });
+
         lastEndTime = new Date(lastEndTime.getTime() + 30 * 60000);
       }
 
       res.json({
         status: 'success',
-        availableSlots: availableSlots
+        availableSlots: availableSlots,
       });
     }
   } catch (error) {
