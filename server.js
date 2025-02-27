@@ -1,5 +1,4 @@
 require('dotenv').config();
-
 const express = require('express');
 const { google } = require('googleapis');
 const app = express();
@@ -18,10 +17,50 @@ const calendar = google.calendar({ version: 'v3', auth });
 // Usando a variável de ambiente para o calendarId
 const calendarId = process.env.CALENDAR_ID;
 
+// Função para formatar data
+const formatDate = (date) => {
+  const options = { year: 'numeric', month: 'long', day: 'numeric' };
+  return new Date(date).toLocaleDateString('pt-BR', options);
+};
+
+const formatTime = (date) => {
+  const options = { hour: '2-digit', minute: '2-digit' };
+  return new Date(date).toLocaleTimeString('pt-BR', options);
+};
+
+// Função para verificar se é um dia útil (segunda a sexta)
+const isWeekday = (date) => {
+  const dayOfWeek = date.getDay(); // 0 = domingo, 1 = segunda-feira, ..., 6 = sábado
+  return dayOfWeek >= 1 && dayOfWeek <= 5; // Retorna true para segunda a sexta
+};
+
+// Lista de feriados fixos (exemplo simples)
+const holidays = [
+  '01-01-2025', // Ano Novo
+  '25-12-2025', // Natal
+  // Adicione outros feriados aqui
+];
+
+// Função para verificar se é feriado
+const isHoliday = (date) => {
+  const formattedDate = formatDate(date).split(' de ').reverse().join('-'); // Formato: "2025-02-27"
+  return holidays.includes(formattedDate);
+};
+
+// Função para filtrar horários entre 08:00 e 17:00
+const filterBusinessHours = (availableSlots) => {
+  return availableSlots.filter(slot => {
+    const hour = parseInt(slot.start.split(":")[0], 10); // Pega a hora do horário
+    return hour >= 8 && hour < 17; // Só horários entre 08:00 e 17:00
+  });
+};
+
 app.get('/get-days', async (req, res) => {
   try {
-    const startDate = new Date('2025-02-27T00:00:00Z'); // 27 de fevereiro
-    const endDate = new Date('2025-02-28T23:59:59Z'); // 28 de fevereiro
+    // Gerar o intervalo de tempo sem limitar as datas
+    const startDate = new Date(); // Data atual
+    const endDate = new Date();
+    endDate.setMonth(endDate.getMonth() + 1); // Para pegar um mês à frente
 
     const response = await calendar.events.list({
       calendarId: calendarId, // Usando o calendarId do .env
@@ -34,20 +73,16 @@ app.get('/get-days', async (req, res) => {
     const events = response.data.items;
     const availableDays = [];
 
-    // Função para formatar data
-    const formatDate = (date) => {
-      const options = { year: 'numeric', month: 'long', day: 'numeric' };
-      return new Date(date).toLocaleDateString('pt-BR', options);
-    };
-
     if (events.length === 0) {
       let lastEndTime = startDate;
 
-      // Gerar slots de 30 minutos para o intervalo de 27 a 28 de fevereiro
+      // Gerar slots de 30 minutos para o intervalo de 1 mês
       while (lastEndTime < endDate) {
-        const dateKey = formatDate(lastEndTime);
-        if (!availableDays.includes(dateKey)) {
-          availableDays.push(dateKey);
+        if (isWeekday(lastEndTime) && !isHoliday(lastEndTime)) {
+          const dateKey = formatDate(lastEndTime);
+          if (!availableDays.includes(dateKey)) {
+            availableDays.push(dateKey);
+          }
         }
         lastEndTime = new Date(lastEndTime.getTime() + 30 * 60000);
       }
@@ -63,9 +98,9 @@ app.get('/get-days', async (req, res) => {
         const eventStart = new Date(event.start.dateTime || event.start.date);
         const eventEnd = new Date(event.end.dateTime || event.end.date);
 
-        // Adicionar a data à lista de dias disponíveis
+        // Adicionar a data à lista de dias disponíveis se for um dia útil e não for feriado
         const dateKey = formatDate(eventStart);
-        if (!availableDays.includes(dateKey)) {
+        if (isWeekday(eventStart) && !isHoliday(eventStart) && !availableDays.includes(dateKey)) {
           availableDays.push(dateKey);
         }
 
@@ -100,26 +135,24 @@ app.get('/get-events', async (req, res) => {
     const events = response.data.items;
     const availableSlots = [];
 
-    const formatDate = (date) => {
-      const options = { hour: '2-digit', minute: '2-digit' };
-      return new Date(date).toLocaleTimeString('pt-BR', options);
-    };
-
     if (events.length === 0) {
       let lastEndTime = startDate;
 
-      // Gerar slots de 30 minutos para o intervalo de 27 a 28 de fevereiro
+      // Gerar slots de 30 minutos para o intervalo do dia escolhido
       while (lastEndTime < endDate) {
         availableSlots.push({
-          start: formatDate(lastEndTime),
-          end: formatDate(new Date(lastEndTime.getTime() + 30 * 60000)),
+          start: formatTime(lastEndTime),
+          end: formatTime(new Date(lastEndTime.getTime() + 30 * 60000)),
         });
         lastEndTime = new Date(lastEndTime.getTime() + 30 * 60000);
       }
 
+      // Filtrando horários para somente entre 08:00 e 17:00
+      const filteredSlots = filterBusinessHours(availableSlots);
+
       res.json({
         status: 'success',
-        availableSlots: availableSlots,
+        availableSlots: filteredSlots,
       });
     } else {
       let lastEndTime = startDate;
@@ -130,8 +163,8 @@ app.get('/get-events', async (req, res) => {
 
         while (lastEndTime < eventStart) {
           availableSlots.push({
-            start: formatDate(lastEndTime),
-            end: formatDate(new Date(lastEndTime.getTime() + 30 * 60000)),
+            start: formatTime(lastEndTime),
+            end: formatTime(new Date(lastEndTime.getTime() + 30 * 60000)),
           });
           lastEndTime = new Date(lastEndTime.getTime() + 30 * 60000);
         }
@@ -139,9 +172,12 @@ app.get('/get-events', async (req, res) => {
         lastEndTime = eventEnd;
       });
 
+      // Filtrando horários para somente entre 08:00 e 17:00
+      const filteredSlots = filterBusinessHours(availableSlots);
+
       res.json({
         status: 'success',
-        availableSlots: availableSlots,
+        availableSlots: filteredSlots,
       });
     }
   } catch (error) {
