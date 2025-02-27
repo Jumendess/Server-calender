@@ -60,16 +60,17 @@ const filterBusinessHours = (availableSlots) => {
 
 // Função para tratar a data e hora da string
 const extractDateAndTime = (str) => {
-  const datePattern = /(\d{1,2})\sde\s(\w+)\sde\s(\d{4})/; // Exemplo: "05 de maio de 2025"
-  const timePattern = /às\s(\d{1,2})h/; // Exemplo: "às 15h"
+  // Expressão regular para capturar o formato "dia 05 de março" e "às 14h"
+  const datePattern = /(\d{1,2})\sde\s(\w+)\sde\s(\d{4})/; // Exemplo: "05 de março de 2025"
+  const timePattern = /às\s(\d{1,2})h/; // Exemplo: "às 14h"
 
-  // Extrair data
+  // Extrair data (dia, mês, ano)
   const dateMatch = str.match(datePattern);
   if (!dateMatch) return { error: 'Data não encontrada' };
 
-  const day = dateMatch[1];
-  const month = dateMatch[2];
-  const year = dateMatch[3];
+  const day = dateMatch[1]; // Dia (ex: 05)
+  const month = dateMatch[2].toLowerCase(); // Mês (ex: março)
+  const year = dateMatch[3]; // Ano (ex: 2025)
 
   // Converter mês para número
   const months = {
@@ -77,9 +78,9 @@ const extractDateAndTime = (str) => {
     julho: '07', agosto: '08', setembro: '09', outubro: '10', novembro: '11', dezembro: '12'
   };
 
-  const formattedDate = `${year}-${months[month.toLowerCase()]}-${day.padStart(2, '0')}`;
+  const formattedDate = `${year}-${months[month]}-${day.padStart(2, '0')}`;
 
-  // Extrair hora
+  // Extrair hora (ex: "às 14h")
   const timeMatch = str.match(timePattern);
   if (!timeMatch) return { error: 'Hora não encontrada' };
 
